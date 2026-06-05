@@ -1,10 +1,14 @@
 """
-French voice agent — live conversational mode via OpenAI Realtime API.
+English-teacher voice agent — live conversational mode via OpenAI Realtime API.
 
-Architecture: speech-to-speech (gpt-4o-realtime-preview)
+A patient, immersion-style English teacher (female, native English voice).
+Speaks English by default, drops to French only to unblock the student, and
+stays strictly on-topic: it declines anything that isn't an English lesson.
+
+Architecture: speech-to-speech (gpt-realtime-2)
   - Mic audio streams continuously; server VAD handles turn detection
-  - Model manages barge-in, interruptions, and tool calls natively
-  - get_weather tool is mocked locally and results are fed back to the model
+  - Model manages barge-in and interruptions natively
+  - No tools — the agent is only an English teacher
 
 Usage:
     python voice_agent_fr_realtime.py
@@ -46,29 +50,13 @@ ECHO_FROM_SPEAKERS = os.environ.get("ECHO_FROM_SPEAKERS", "") not in ("", "0", "
 # Override from the shell, e.g.  INPUT_DEVICE="Blue Snowball" python voice_agent_fr_realtime.py
 INPUT_DEVICE = os.environ.get("INPUT_DEVICE", "snowball")
 
+# Output voice. We want a clearly FEMALE voice: "marin" is the newest, most
+# natural GA voice and reads female. Other female-leaning options if you want
+# to compare: "coral", "sage", "shimmer". Override from the shell, e.g.
+#   VOICE=coral python voice_agent_fr_realtime.py
+VOICE = os.environ.get("VOICE", "marin")
+
 WS_URL = "wss://api.openai.com/v1/realtime?model=gpt-realtime-2"
-
-# ── Mock weather data ─────────────────────────────────────────────────────────
-
-_WEATHER_DB = {
-    "paris":     {"condition": "ensoleillé",             "temp": 22},
-    "lyon":      {"condition": "nuageux",                "temp": 18},
-    "marseille": {"condition": "partiellement nuageux",  "temp": 26},
-    "bordeaux":  {"condition": "pluvieux",               "temp": 15},
-    "nice":      {"condition": "ensoleillé",             "temp": 28},
-    "toulouse":  {"condition": "venteux",                "temp": 20},
-}
-
-
-def get_weather(city: str) -> str:
-    data = _WEATHER_DB.get(city.lower().strip())
-    if data:
-        return (
-            f"À {city.capitalize()} il fait {data['condition']} "
-            f"avec {data['temp']} degrés Celsius."
-        )
-    return f"Je n'ai pas de données météo pour {city}."
-
 
 # ── Audio device helpers ──────────────────────────────────────────────────────
 
@@ -126,10 +114,47 @@ SESSION_CONFIG = {
     "model": "gpt-realtime-2",
     "output_modalities": ["audio"],
     "instructions": (
-        "Tu es un assistant vocal francophone sympathique. "
-        "Réponds TOUJOURS en français, de façon concise et naturelle. "
-        "Quand l'utilisateur demande la météo d'une ville, utilise l'outil get_weather. "
-        "Villes disponibles : Paris, Lyon, Marseille, Bordeaux, Nice, Toulouse."
+        "You are Emily, a friendly and patient English teacher. You are ONLY "
+        "an English teacher: your sole purpose is to help the student learn and "
+        "practice English. Politely DECLINE any request that is not about "
+        "learning English — weather, general trivia, coding, personal tasks, "
+        "etc. — and steer the conversation back to the English lesson. Never "
+        "break character.\n\n"
+        "METHOD — IMMERSION: speak in English by default, clearly and at a pace "
+        "the student can follow. Switch to French only briefly to unblock the "
+        "student (explain a hard word, reassure a beginner), then return to "
+        "English right away. Keep your turns short and conversational.\n\n"
+        "CONVERSATION FIRST: your top priority is a natural, flowing chat — like "
+        "a friendly native speaker the student is talking with, NOT a grammar "
+        "checker. React to WHAT the student says (be curious, share a reaction, "
+        "ask a real follow-up question), not to how perfectly they say it. The "
+        "student should feel they are having a real conversation, never that "
+        "they are being tested or interrupted.\n\n"
+        "CORRECTING MISTAKES — RARELY AND LIGHTLY: do NOT correct every sentence "
+        "— that is frustrating and kills the conversation. Let most small "
+        "mistakes go. Understand the student and keep the chat moving. Only stop "
+        "to correct when (a) the mistake genuinely breaks understanding, or "
+        "(b) the same clear error keeps repeating — and even then, no more than "
+        "occasionally. A good habit is the gentle recast: simply reply using the "
+        "correct form naturally in your own answer, without announcing it as a "
+        "correction. For example, if the student says \"I goed to the cinema,\" "
+        "you might say \"Oh nice, you WENT to the cinema! What did you see?\" — "
+        "modeling \"went\" while staying in the flow.\n"
+        "EVERY NOW AND THEN — only for a BIG mistake, and only once in a while, "
+        "not often — make it a fun little repeat-after-me moment. Give ONE "
+        "short, simple corrected sentence (a few words, never a long one) and "
+        "cheerfully ask the student to say it back, like a quick game: \"Ooh, "
+        "let's say that one together — 'I WENT to the park.' Your turn!\" Keep "
+        "it light, playful, and encouraging — celebrate when they get it (\"Yes! "
+        "Perfect!\"). Never drill the same way twice in a row; if you did a "
+        "repeat-after-me recently, just let mistakes go and keep chatting. When "
+        "in doubt, let it go and keep the conversation fun.\n\n"
+        "VOICE & ACCENT: you are a woman with a clear, standard native English "
+        "accent (neutral American), articulate and easy for a learner to "
+        "imitate — you are a pronunciation model. Speak warmly with natural, "
+        "expressive intonation, vary your rhythm, and use small spoken markers "
+        "when natural (\"okay\", \"right\", \"hmm\", \"let's see\"). Never sound "
+        "flat, monotone, or robotic."
     ),
     "audio": {
         "input": {
@@ -151,27 +176,12 @@ SESSION_CONFIG = {
         },
         "output": {
             "format": {"type": "audio/pcm", "rate": SAMPLE_RATE},
-            "voice": "marin",
+            "voice": VOICE,
         },
     },
-    "tools": [
-        {
-            "type": "function",
-            "name": "get_weather",
-            "description": "Retourne la météo actuelle pour une ville française.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "city": {
-                        "type": "string",
-                        "description": "Nom de la ville (ex: Paris, Lyon, Marseille)",
-                    }
-                },
-                "required": ["city"],
-            },
-        }
-    ],
-    "tool_choice": "auto",
+    # No tools — this agent is ONLY an English teacher and never calls out.
+    "tools": [],
+    "tool_choice": "none",
 }
 
 
@@ -212,16 +222,9 @@ class FrenchVoiceAgent:
     # ── Tool dispatch ──────────────────────────────────────────────────────────
 
     def _dispatch_tool(self, call_id: str, name: str, args_json: str):
-        try:
-            args = json.loads(args_json)
-        except json.JSONDecodeError:
-            args = {}
-
-        if name == "get_weather":
-            result = get_weather(args.get("city", ""))
-        else:
-            result = f"Outil inconnu : {name}"
-
+        # This agent exposes no tools, so this path should never be reached.
+        # Kept as a safe fallback in case the model ever invents a tool call.
+        result = f"Unknown tool: {name}"
         print(f"  → {result}")
 
         # Return the result to the model. Don't request a new response here —
@@ -257,7 +260,7 @@ class FrenchVoiceAgent:
 
             if etype == "session.created":
                 self._send({"type": "session.update", "session": SESSION_CONFIG})
-                print("Session prête — parlez en français !\n")
+                print("Lesson ready — say hello in English!\n")
 
             elif etype == "session.updated":
                 print(f"[DEBUG session] {json.dumps(event.get('session', {}), indent=2)}")
@@ -425,7 +428,7 @@ class FrenchVoiceAgent:
     # ── Entry point ────────────────────────────────────────────────────────────
 
     def run(self):
-        print("=== Agent Vocal Français — Conversation Temps Réel ===")
+        print("=== English Teacher — Live Conversation ===")
         print("Connexion à OpenAI Realtime…")
         self._connect()
 

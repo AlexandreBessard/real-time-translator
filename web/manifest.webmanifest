@@ -1,0 +1,13 @@
+{
+  "name": "Emily — Talking Avatar",
+  "short_name": "Emily",
+  "description": "A 3D avatar that lip-syncs to speech, in your browser.",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0e1320",
+  "theme_color": "#0e1320",
+  "icons": [
+    { "src": "./icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}

@@ -49,3 +49,6 @@ Thumbs.db
 
 # Logs
 *.log
+
+# Tooling artifacts
+.playwright-mcp/

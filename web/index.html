@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#0e1320" />
+  <title>Emily — Talking Avatar</title>
+
+  <link rel="manifest" href="./manifest.webmanifest" />
+  <link rel="icon" href="./icon.svg" type="image/svg+xml" />
+  <link rel="apple-touch-icon" href="./icon.svg" />
+  <link rel="stylesheet" href="./style.css" />
+
+  <!-- three.js is pulled from a CDN for dev. To go fully offline/self-hosted,
+       vendor these files into web/vendor/ and point the importmap at them. -->
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+    }
+  }
+  </script>
+</head>
+<body>
+  <div id="stage">
+    <canvas id="avatar-canvas"></canvas>
+
+    <div id="status" class="status">Tap “Start” to wake the avatar</div>
+
+    <!-- Big tap target: browsers require a user gesture before audio/mic. -->
+    <button id="start-btn" class="start-overlay">
+      <span class="start-emoji">🎙️</span>
+      <span>Start</span>
+    </button>
+  </div>
+
+  <div id="controls" class="controls" hidden>
+    <div class="row">
+      <button id="emily-btn" class="btn emily-btn">✨ Talk to Emily</button>
+    </div>
+
+    <div class="row secondary-row">
+      <button id="test-btn" class="btn">▶ Test (fake speech)</button>
+      <button id="mic-btn" class="btn">🎤 Microphone</button>
+      <label class="btn file-btn">
+        🎵 Audio file
+        <input id="file-input" type="file" accept="audio/*" hidden />
+      </label>
+      <button id="stop-btn" class="btn ghost">■ Stop</button>
+    </div>
+
+    <div id="transcript" class="transcript" hidden></div>
+
+    <details class="avatar-picker">
+      <summary>Change avatar</summary>
+      <p class="hint">
+        Create your own free avatar at
+        <a href="https://readyplayer.me" target="_blank" rel="noreferrer">readyplayer.me</a>
+        and paste the <code>.glb</code> URL below.
+      </p>
+      <div class="row">
+        <input id="avatar-url" type="url" placeholder="https://models.readyplayer.me/xxxx.glb" />
+        <button id="load-avatar" class="btn">Load</button>
+      </div>
+    </details>
+  </div>
+
+  <script type="module" src="./main.js"></script>
+  <script>
+    // Register the service worker so the app is installable on phones.
+    if ("serviceWorker" in navigator) {
+      window.addEventListener("load", () => {
+        navigator.serviceWorker.register("./sw.js").catch(() => {});
+      });
+    }
+  </script>
+</body>
+</html>

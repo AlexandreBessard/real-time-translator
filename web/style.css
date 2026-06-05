@@ -1,0 +1,166 @@
+:root {
+  --bg-top: #1b2440;
+  --bg-bottom: #0e1320;
+  --accent: #6ea8ff;
+  --text: #eef2ff;
+  --panel: rgba(14, 19, 32, 0.72);
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  height: 100%;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  color: var(--text);
+  background: radial-gradient(120% 90% at 50% 0%, var(--bg-top), var(--bg-bottom));
+  -webkit-tap-highlight-color: transparent;
+  overflow: hidden;
+}
+
+body {
+  display: flex;
+  flex-direction: column;
+  /* Respect notches / home indicators on phones. */
+  padding: env(safe-area-inset-top) env(safe-area-inset-right)
+           env(safe-area-inset-bottom) env(safe-area-inset-left);
+}
+
+#stage {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+#avatar-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  touch-action: none; /* let OrbitControls handle drags, not the page */
+}
+
+.status {
+  position: absolute;
+  top: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 8px 16px;
+  border-radius: 999px;
+  background: var(--panel);
+  backdrop-filter: blur(8px);
+  font-size: 14px;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+/* ── Start overlay ─────────────────────────────────────────── */
+.start-overlay {
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  width: 160px;
+  height: 160px;
+  border-radius: 50%;
+  border: none;
+  background: var(--accent);
+  color: #08122b;
+  font-size: 22px;
+  font-weight: 700;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  cursor: pointer;
+  box-shadow: 0 18px 50px rgba(110, 168, 255, 0.45);
+  transition: transform 0.15s ease, opacity 0.3s ease;
+}
+.start-overlay:active { transform: scale(0.95); }
+.start-emoji { font-size: 46px; }
+
+/* ── Controls ──────────────────────────────────────────────── */
+.controls {
+  flex: 0 0 auto;
+  padding: 14px;
+  background: var(--panel);
+  backdrop-filter: blur(10px);
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+
+.btn {
+  flex: 1 1 auto;
+  min-width: 120px;
+  padding: 14px 16px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: center;
+}
+.btn:active { transform: scale(0.97); }
+.btn.active { background: var(--accent); color: #08122b; border-color: transparent; }
+.btn.ghost { flex: 0 0 auto; min-width: 90px; opacity: 0.8; }
+.file-btn { display: inline-flex; align-items: center; justify-content: center; }
+
+.emily-btn {
+  font-size: 17px;
+  letter-spacing: 0.01em;
+  background: rgba(110, 168, 255, 0.12);
+  border-color: rgba(110, 168, 255, 0.35);
+}
+.emily-btn.active {
+  background: linear-gradient(135deg, #5b9bff, #8b5cf6);
+  border-color: transparent;
+  color: #fff;
+}
+.emily-btn:disabled { opacity: 0.6; cursor: default; }
+
+.secondary-row { margin-top: 6px; }
+.secondary-row .btn { font-size: 13px; padding: 10px 14px; opacity: 0.75; }
+
+.transcript {
+  margin-top: 10px;
+  max-height: 110px;
+  overflow-y: auto;
+  font-size: 13px;
+  line-height: 1.6;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  padding-top: 8px;
+}
+.transcript-line { padding: 1px 0; }
+.transcript-line.emily { color: var(--accent); }
+.transcript-line.user  { opacity: 0.7; }
+
+.avatar-picker {
+  margin-top: 12px;
+  font-size: 14px;
+}
+.avatar-picker summary { cursor: pointer; opacity: 0.85; }
+.avatar-picker .hint { opacity: 0.75; line-height: 1.5; }
+.avatar-picker input[type="url"] {
+  flex: 1 1 200px;
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(0, 0, 0, 0.25);
+  color: var(--text);
+  font-size: 14px;
+}
+a { color: var(--accent); }
+code { background: rgba(0,0,0,0.3); padding: 1px 5px; border-radius: 5px; }
+
+/* Roomier layout on wide screens. */
+@media (min-width: 720px) {
+  .controls { padding: 18px 28px; }
+  .btn { flex: 0 1 auto; }
+}
