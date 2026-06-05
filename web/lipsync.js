@@ -19,6 +19,7 @@ export class LipSync {
     // Smoothed outputs (attack fast, release slower → natural-looking).
     this.open = 0;
     this.wide = 0;
+    this.energy = 0;       // slow loudness envelope → "arousal" for expression
 
     this._active = null;   // current source node we may need to stop
     this._test = false;    // procedural "fake speech" mode
@@ -145,6 +146,11 @@ export class LipSync {
     this.open += (targetOpen - this.open) * aOpen;
     this.wide += (targetWide - this.wide) * 0.15;
 
-    return { open: this.open, wide: this.wide };
+    // Much slower envelope of loudness: a sense of how animated the speech is
+    // over the last ~second, not this instant. Drives expressive liveliness
+    // (brow lifts, eye engagement) without flickering frame to frame.
+    this.energy += (this.open - this.energy) * (this.open > this.energy ? 0.04 : 0.02);
+
+    return { open: this.open, wide: this.wide, energy: this.energy };
   }
 }

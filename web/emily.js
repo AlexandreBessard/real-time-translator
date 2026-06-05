@@ -16,6 +16,7 @@ export class EmilyRealtime {
     this.lip = lip;
     this.onTranscript = null;
     this.onDisconnect = null;
+    this._lastEmilyText = "";   // dedupe consecutive identical transcript events
 
     this._pc = null;
     this._dc = null;
@@ -151,10 +152,20 @@ export class EmilyRealtime {
       if (text) this.onTranscript?.("user", text);
     }
 
-    // Emily's spoken response → transcript
-    if (t === "response.audio_transcript.done") {
+    // Emily's spoken response → transcript. The GA Realtime API renamed this
+    // event with an "output_" prefix; accept both so beta and GA both work.
+    if (t === "response.output_audio_transcript.done" ||
+        t === "response.audio_transcript.done") {
       const text = event.transcript?.trim();
-      if (text) this.onTranscript?.("emily", text);
+      // Some responses surface the transcript via more than one event — only
+      // act on a genuinely new line so we don't classify/show it twice.
+      if (text && text !== this._lastEmilyText) {
+        console.log(`[emily] transcript via ${t}`);
+        this._lastEmilyText = text;
+        this.onTranscript?.("emily", text);
+      } else if (text) {
+        console.log(`[emily] duplicate transcript via ${t} — ignored`);
+      }
     }
   }
 }

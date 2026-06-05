@@ -12,6 +12,7 @@ import { DRACOLoader } from "three/addons/loaders/DRACOLoader.js";
 import { MeshoptDecoder } from "three/addons/libs/meshopt_decoder.module.js";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { LipSync } from "./lipsync.js";
+import { Expression, classifyEmotion } from "./expression.js";
 
 const THREE_CDN = "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/";
 
@@ -26,8 +27,18 @@ const canvas = document.getElementById("avatar-canvas");
 const statusEl = document.getElementById("status");
 const startBtn = document.getElementById("start-btn");
 const controls = document.getElementById("controls");
+const repeatCard = document.getElementById("repeat-card");
+const repeatLabel = document.getElementById("repeat-label");
+const repeatWord = document.getElementById("repeat-word");
+const repeatText = document.getElementById("repeat-text");
 
 const lip = new LipSync();
+const face = new Expression();
+// Dev hooks: try these live from the console.
+//   setEmotion("surprised")          — preview an expression
+//   showRepeat("I went to the park") — preview the repeat-after-me card
+window.setEmotion = (name) => face.setEmotion(name, 6);
+window.showRepeat = (sentence) => showRepeat(sentence);
 
 // ── three.js scene ───────────────────────────────────────────
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
@@ -83,7 +94,6 @@ const JAW   = ["jawOpen"];                                   // both sets
 const AA    = ["viseme_aa"];                                 // RPM open vowel
 const WIDE  = ["viseme_I", "mouthSmileLeft", "mouthSmileRight"];
 const ROUND = ["viseme_U", "mouthFunnel", "mouthPucker"];
-const BLINK = ["eyeBlinkLeft", "eyeBlinkRight"];
 
 function indexMorphs(model) {
   Object.keys(morphTargets).forEach((k) => delete morphTargets[k]);
@@ -95,12 +105,20 @@ function indexMorphs(model) {
   });
 }
 
-// Apply a value to every listed blend shape that the model actually has.
-function setMorph(names, value) {
-  for (const name of names) {
-    const targets = morphTargets[name];
-    if (!targets) continue;
-    for (const { mesh, index } of targets) mesh.morphTargetInfluences[index] = value;
+// Raise a set of candidate blend shapes to `value` in an influence buffer,
+// keeping the strongest contribution per channel (max, not sum) so an
+// emotional smile and a viseme spread don't stack past 1.0 and fight.
+function mergeMax(infl, names, value) {
+  for (const name of names) if (value > (infl[name] || 0)) infl[name] = value;
+}
+
+// Write the per-frame influence buffer to the model. Every morph the model has
+// is set explicitly, so any channel absent from the buffer relaxes to 0 — no
+// stuck expressions, no leftover visemes.
+function applyMorphs(infl) {
+  for (const name in morphTargets) {
+    const v = infl[name] || 0;
+    for (const { mesh, index } of morphTargets[name]) mesh.morphTargetInfluences[index] = v;
   }
 }
 
@@ -193,44 +211,47 @@ function frameOnFace() {
   orbit.update();
 }
 
-// ── Idle life: blinking + faint sway ─────────────────────────
-let nextBlink = 1.5;
-let blinkT = -1;
-function updateIdle(dt, elapsed) {
-  // Blink: schedule, then a quick close→open over ~150ms.
-  nextBlink -= dt;
-  if (nextBlink <= 0 && blinkT < 0) { blinkT = 0; nextBlink = 2 + Math.random() * 4; }
-  if (blinkT >= 0) {
-    blinkT += dt;
-    const p = blinkT / 0.15;
-    const v = p < 1 ? Math.sin(p * Math.PI) : 0;
-    setMorph(BLINK, v);
-    if (p >= 1) blinkT = -1;
-  }
-  // Gentle head sway so the avatar never looks frozen.
-  if (headBone) {
-    headBone.rotation.y = Math.sin(elapsed * 0.5) * 0.04;
-    headBone.rotation.x = Math.sin(elapsed * 0.37) * 0.025;
-  }
-}
-
 // ── Render loop ──────────────────────────────────────────────
 const clock = new THREE.Clock();
+let speakingEnv = 0;    // envelope of mouth activity → "is she talking right now?"
+let silenceT = 0;       // seconds Emily has been quiet → used to time the repeat card
 function animate() {
   requestAnimationFrame(animate);
   const dt = Math.min(clock.getDelta(), 0.05);
   const elapsed = clock.elapsedTime;
 
   if (avatar) {
-    const { open, wide } = lip.update(dt);
-    // RPM/Wolf3D blend shapes are built for expressive full-range animation —
-    // a raw value of 1.0 looks cartoonishly wide. Scale down to a natural range.
-    setMorph(JAW, open * 0.35);
-    setMorph(AA, open * 0.22);
-    setMorph(WIDE, Math.max(0, wide - 0.5) * 2 * open * 0.28);
-    setMorph(ROUND, Math.max(0, 0.5 - wide) * 2 * open * 0.28);
+    const { open, wide, energy } = lip.update(dt);
 
-    updateIdle(dt, elapsed);
+    // "Speaking" is sustained mouth activity, not a single loud spike — so a
+    // cough or a click doesn't trigger expressive brow lifts.
+    speakingEnv += (open - speakingEnv) * (open > speakingEnv ? 0.3 : 0.05);
+    const speaking = speakingEnv > 0.06;
+
+    // Reveal a pending repeat-after-me only once Emily has actually gone quiet,
+    // so the card appears when she STOPS talking — not when her text finished
+    // generating (which is several seconds earlier, mid-speech).
+    silenceT = speaking ? 0 : silenceT + dt;
+    if (pendingRepeat && silenceT > 0.6) {
+      console.log("[repeat] Emily silent → showing card:", pendingRepeat);
+      showRepeat(pendingRepeat);
+      pendingRepeat = null;
+    }
+
+    // Expression layer fills the buffer first (emotion pose, prosody liveliness,
+    // blink, gaze); lip-sync mouth merges on top (max per channel).
+    const { morphs, head } = face.update(dt, elapsed, { open, energy, speaking });
+    mergeMax(morphs, JAW, open * 0.35);
+    mergeMax(morphs, AA, open * 0.22);
+    mergeMax(morphs, WIDE, Math.max(0, wide - 0.5) * 2 * open * 0.28);
+    mergeMax(morphs, ROUND, Math.max(0, 0.5 - wide) * 2 * open * 0.28);
+    applyMorphs(morphs);
+
+    if (headBone) {
+      headBone.rotation.x = head.rx;
+      headBone.rotation.y = head.ry;
+      headBone.rotation.z = head.rz;
+    }
   }
   renderer.render(scene, camera);
 }
@@ -244,11 +265,111 @@ function resize() {
 }
 new ResizeObserver(resize).observe(canvas);
 
+// ── "Repeat after me" card ───────────────────────────────────
+// Emily occasionally gives the student one short corrected sentence to say
+// back. Each of her lines is classified server-side (see detectRepeat); when
+// it's a repeat-after-me, the exact sentence is shown here to read aloud.
+let shownKey = "";        // payload currently on the card — for de-dup
+let pendingRepeat = null; // { sentences, word } classified, awaiting silence
+
+// Append a client-side event to the server's debug log (web/conversation.txt).
+function logEvent(msg) {
+  console.log("[event]", msg);
+  fetch("/log", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ event: msg }),
+  }).catch(() => {});
+}
+
+// Wrap occurrences of `word` in the sentence with a highlight span (escaped).
+function highlightWord(sentence, word) {
+  const span = document.createElement("span");
+  if (!word) { span.textContent = sentence; return span; }
+  const re = new RegExp(`\\b(${word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")})\\b`, "ig");
+  let last = 0, m;
+  while ((m = re.exec(sentence)) !== null) {
+    if (m.index > last) span.appendChild(document.createTextNode(sentence.slice(last, m.index)));
+    const hl = document.createElement("span");
+    hl.className = "repeat-hl";
+    hl.textContent = m[0];
+    span.appendChild(hl);
+    last = m.index + m[0].length;
+  }
+  span.appendChild(document.createTextNode(sentence.slice(last)));
+  return span;
+}
+
+// payload: { sentences: [string], word: string }  (word "" → plain repeat)
+function showRepeat(payload) {
+  const list = payload.sentences || [];
+  const word = payload.word || "";
+  const key = word + "|" + list.join("\n");
+  // Already showing exactly this — skip so we don't re-trigger the animation.
+  if (!repeatCard.hidden && key === shownKey) return;
+  shownKey = key;
+
+  // Pronunciation mode shows the target word big; plain repeat just lists lines.
+  repeatLabel.textContent = word ? "🗣️ Practice this word" : "🔁 Your turn — say this";
+  repeatWord.hidden = !word;
+  repeatWord.textContent = word;
+
+  repeatText.innerHTML = "";
+  for (const s of list) {
+    const line = document.createElement("div");
+    line.className = "repeat-line";
+    line.appendChild(highlightWord(s, word));
+    repeatText.appendChild(line);
+  }
+  repeatCard.hidden = false;
+  // Next frame so the display→opacity transition actually animates.
+  requestAnimationFrame(() => repeatCard.classList.add("show"));
+  logEvent(`card shown${word ? ` (word: ${word})` : ""}: ${list.join(" | ")}`);
+}
+
+// Ask the backend classifier whether Emily's line is a repeat-after-me, and
+// show the sentence(s) if so. Deterministic — independent of the realtime model.
+async function detectRepeat(text) {
+  try {
+    const res = await fetch("/detect-repeat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text }),
+    });
+    if (!res.ok) { logEvent(`detect-repeat HTTP ${res.status}`); return; }
+    const { is_repeat, sentences, focus_word } = await res.json();
+    console.log("[repeat] classified:", { is_repeat, sentences, focus_word });
+    // Hold the result; the render loop shows it once Emily falls silent. If
+    // she's already quiet (e.g. slow classifier), it flushes on the next frame.
+    if (is_repeat && sentences?.length) {
+      pendingRepeat = { sentences, word: focus_word || "" };
+      logEvent(`pending repeat (awaiting silence): ${sentences.join(" | ")}`);
+    }
+  } catch (err) {
+    logEvent(`detect-repeat fetch failed: ${err.message}`);
+  }
+}
+
+function hideRepeat() {
+  // Hide the visible card, but DON'T discard an unshown pending sentence: a
+  // freshly classified repeat should still appear even if the student just
+  // made a sound (which fires a "user" transcript → hideRepeat).
+  if (!repeatCard.hidden) logEvent("card hidden");
+  shownKey = "";
+  repeatCard.classList.remove("show");
+  setTimeout(() => {
+    if (!repeatCard.classList.contains("show")) repeatCard.hidden = true;
+  }, 300);
+}
+
 // ── Emily state ──────────────────────────────────────────────
 let emily = null;
 
 function disconnectEmily() {
   if (!emily) return;
+  logEvent("— session ended —");
+  pendingRepeat = null;   // drop any unshown repeat when the session ends
+  hideRepeat();
   emily.disconnect();
   emily = null;
   const btn = document.getElementById("emily-btn");
@@ -337,6 +458,25 @@ document.getElementById("emily-btn").addEventListener("click", async () => {
   };
 
   emily.onTranscript = (speaker, text) => {
+    console.log(`[transcript] ${speaker}:`, text);
+    // Mirror the conversation to the server's debug log (web/conversation.txt).
+    fetch("/log", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ speaker, text }),
+    }).catch(() => {});
+    // Reflect what's said on Emily's face: her own lines set her mood from
+    // sentiment; while the student is talking she wears a "considering" look.
+    if (speaker === "emily") {
+      face.setEmotion(classifyEmotion(text));
+      // Always classify with the model: a regex would grab the first quoted
+      // phrase, which is often the student's MISTAKE, not the correction.
+      detectRepeat(text);
+    } else if (speaker === "user") {
+      face.setEmotion("thinking", 2.0);
+      hideRepeat();   // the student has taken their turn
+    }
+
     const area = document.getElementById("transcript");
     area.hidden = false;
     const line = document.createElement("div");
@@ -348,6 +488,7 @@ document.getElementById("emily-btn").addEventListener("click", async () => {
 
   try {
     await emily.connect();
+    logEvent("— session started —");
     // SDP exchange complete — re-enable the button now.
     // Audio starts flowing once ICE/DTLS finish in the background (~1-2 s).
     btn.textContent = "✨ Disconnect Emily";
@@ -356,6 +497,7 @@ document.getElementById("emily-btn").addEventListener("click", async () => {
     statusEl.textContent = "Connected — say hello in English!";
   } catch (err) {
     console.error(err);
+    logEvent(`connection failed: ${err.message}`);
     statusEl.textContent = `Connection failed: ${err.message}`;
     emily = null;
     btn.textContent = "✨ Talk to Emily";

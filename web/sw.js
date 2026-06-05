@@ -1,12 +1,14 @@
 // Minimal service worker — makes the app installable and caches the local shell.
 // Cross-origin assets (three.js CDN, the avatar GLB) always go to the network.
-const CACHE = "emily-avatar-v2";
+const CACHE = "emily-avatar-v3";
 const SHELL = [
   "./",
   "./index.html",
   "./style.css",
   "./main.js",
   "./lipsync.js",
+  "./expression.js",
+  "./emily.js",
   "./manifest.webmanifest",
   "./icon.svg",
 ];

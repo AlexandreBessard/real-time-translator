@@ -52,3 +52,6 @@ Thumbs.db
 
 # Tooling artifacts
 .playwright-mcp/
+
+# Debug conversation transcript (regenerated each server run)
+web/conversation.txt

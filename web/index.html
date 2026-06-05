@@ -28,6 +28,13 @@
 
     <div id="status" class="status">Tap “Start” to wake the avatar</div>
 
+    <!-- Shown when Emily asks the student to repeat a corrected sentence. -->
+    <div id="repeat-card" class="repeat-card" hidden>
+      <div id="repeat-label" class="repeat-label">🔁 Your turn — say this</div>
+      <div id="repeat-word" class="repeat-word" hidden></div>
+      <div id="repeat-text" class="repeat-text"></div>
+    </div>
+
     <!-- Big tap target: browsers require a user gesture before audio/mic. -->
     <button id="start-btn" class="start-overlay">
       <span class="start-emoji">🎙️</span>
