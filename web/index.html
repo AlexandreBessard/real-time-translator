@@ -45,21 +45,17 @@
   <div id="controls" class="controls" hidden>
     <div class="row">
       <button id="emily-btn" class="btn emily-btn">✨ Talk to Emily</button>
-    </div>
-
-    <div class="row secondary-row">
-      <button id="test-btn" class="btn">▶ Test (fake speech)</button>
-      <button id="mic-btn" class="btn">🎤 Microphone</button>
-      <label class="btn file-btn">
-        🎵 Audio file
-        <input id="file-input" type="file" accept="audio/*" hidden />
-      </label>
       <button id="stop-btn" class="btn ghost">■ Stop</button>
     </div>
 
+    <!-- hidden but kept so JS references don't break -->
+    <button id="test-btn" hidden></button>
+    <button id="mic-btn" hidden></button>
+    <label hidden><input id="file-input" type="file" accept="audio/*" hidden /></label>
+
     <div id="transcript" class="transcript" hidden></div>
 
-    <details class="avatar-picker">
+    <details class="avatar-picker" hidden>
       <summary>Change avatar</summary>
       <p class="hint">
         Create your own free avatar at

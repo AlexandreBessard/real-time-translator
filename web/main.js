@@ -241,8 +241,8 @@ function animate() {
     // Expression layer fills the buffer first (emotion pose, prosody liveliness,
     // blink, gaze); lip-sync mouth merges on top (max per channel).
     const { morphs, head } = face.update(dt, elapsed, { open, energy, speaking });
-    mergeMax(morphs, JAW, open * 0.35);
-    mergeMax(morphs, AA, open * 0.22);
+    mergeMax(morphs, JAW, open * 0.40);
+    mergeMax(morphs, AA, open * 0.25);
     mergeMax(morphs, WIDE, Math.max(0, wide - 0.5) * 2 * open * 0.28);
     mergeMax(morphs, ROUND, Math.max(0, 0.5 - wide) * 2 * open * 0.28);
     applyMorphs(morphs);
@@ -468,12 +468,20 @@ document.getElementById("emily-btn").addEventListener("click", async () => {
     // Reflect what's said on Emily's face: her own lines set her mood from
     // sentiment; while the student is talking she wears a "considering" look.
     if (speaker === "emily") {
-      face.setEmotion(classifyEmotion(text));
+      const emotion = classifyEmotion(text);
+      face.setEmotion(emotion);
+      // Nod on acknowledgment lines ("yes", "right", "exactly", positive feedback).
+      if (emotion === "happy" ||
+          /\b(yes|right|exactly|mhm|uh-huh|indeed|sure|of course|i see)\b/i.test(text)) {
+        face.triggerNod(0.06);
+      }
       // Always classify with the model: a regex would grab the first quoted
       // phrase, which is often the student's MISTAKE, not the correction.
       detectRepeat(text);
     } else if (speaker === "user") {
-      face.setEmotion("thinking", 2.0);
+      // Attentive listening face + small acknowledgment nod while Emily reads the input.
+      face.setEmotion("listening", 4.0);
+      face.triggerNod(0.04);
       hideRepeat();   // the student has taken their turn
     }
 

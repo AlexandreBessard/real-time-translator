@@ -128,7 +128,10 @@ export class LipSync {
         sum += v * v;
       }
       const rms = Math.sqrt(sum / this.timeData.length);
-      targetOpen = Math.min(1, rms * 3.2); // scale quiet speech up a bit
+      // Noise floor: ignore sub-threshold signals so the mouth stays still
+      // during genuine silence instead of twitching with room noise.
+      const FLOOR = 0.015;
+      targetOpen = rms < FLOOR ? 0 : Math.min(1, (rms - FLOOR) * 4.0);
 
       // Spectral balance → spread (high freq = "ee") vs round (low freq = "oo").
       this.analyser.getByteFrequencyData(this.freqData);
