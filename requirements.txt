@@ -1,0 +1,5 @@
+websocket-client>=1.8.0
+pyaudio>=0.2.14
+python-dotenv>=1.0.0
+openai-agents>=0.0.19
+numpy>=1.26.0
